@@ -8,8 +8,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
 
-# 日本時間のタイムスタンプ
 jst_now = datetime.datetime.now()
 log_filename = f"log_{jst_now.strftime('%Y%m%d_%H%M%S')}.txt"
 
@@ -21,15 +21,15 @@ def write_log(message):
         f.write(log_msg + "\n")
 
 def create_driver(proxy_addr, user_agent):
-    """
-    proxy_addr: "123.456.78.90:8080" 形式、または None
-    """
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--remote-debugging-port=9222')
+    # 言語設定を日本語に（海外IPからのアクセスでも日本語ブラウザとして振る舞う）
+    options.add_argument('--lang=ja-JP')
+    
     if user_agent:
         options.add_argument(f'user-agent={user_agent}')
     
@@ -51,7 +51,6 @@ X_CYCLES = int(conf['X_CYCLES'])
 MODE = conf['MODE']
 USER_AGENT = conf['USER_AGENT']
 raw_proxy_list = conf.get('PROXY_LIST', '')
-# プロキシの順番を毎回シャッフルして、全プロキシを試せるようにする
 original_proxies = [p.strip() for p in raw_proxy_list.split(',') if p.strip()]
 
 write_log(f"=== プログラム開始 (ログファイル: {log_filename}) ===")
@@ -61,6 +60,7 @@ try:
         total_seconds = M_MIN * 60
         start_time = datetime.datetime.now()
         
+        # スケジュール決定
         if MODE == "fixed":
             offsets = [(total_seconds / N_TIMES) * i for i in range(N_TIMES)]
         else:
@@ -78,25 +78,40 @@ try:
                 time.sleep(1)
             
             success = False
-            # 今回試すプロキシたちのリスト（ランダムに入れ替え）
             test_proxies = random.sample(original_proxies, len(original_proxies))
             
-            # --- 手順1: プロキシを一つずつ試す ---
+            # 各試行でのプロキシループ
             for p_idx, current_proxy in enumerate(test_proxies, 1):
                 driver = None
                 try:
                     write_log(f"  [実行] {i}回目(プロキシ試行{p_idx}): {current_proxy}")
                     driver = create_driver(current_proxy, USER_AGENT)
-                    driver.set_page_load_timeout(35)
+                    # 読み込み待ち時間をしっかり確保
+                    driver.set_page_load_timeout(45)
+                    
+                    # 1. アクセス開始
                     driver.get(URL)
                     
-                    # 成功判定（タイトルが空でない、かつエラー画面っぽくないこと）
-                    if driver.title and len(driver.title) > 3:
-                        write_log(f"  [成功] Title: {driver.title[:20]}...")
-                        success = True
-                        break
+                    # 2. 転送待ち（リダイレクトを考慮して少し待機）
+                    time.sleep(8) 
+                    
+                    current_url = driver.current_url
+                    current_title = driver.title
+                    
+                    # 3. 成功判定：URLが取得できているか、エラーページでないか
+                    if current_url and "http" in current_url:
+                        # プロキシのエラーページ（403, 502, 接続不可）をタイトルで弾く
+                        if any(x in current_title.lower() for x in ["error", "forbidden", "not found", "unavailable"]):
+                            write_log(f"  [失敗] エラーページ検出: {current_title[:20]}")
+                        else:
+                            write_log(f"  [成功] Title: {current_title[:15]}... / URL: {current_url[:30]}...")
+                            success = True
+                            # ログを確実に残すためのダメ押し滞在
+                            time.sleep(5)
+                            break
                     else:
-                        write_log(f"  [失敗] 無効なページタイトルです。")
+                        write_log(f"  [失敗] URL取得不可")
+                        
                 except Exception as e:
                     write_log(f"  [エラー] 接続失敗: {str(e)[:40]}")
                 finally:
@@ -104,23 +119,21 @@ try:
                 
                 if success: break
 
-            # --- 手順2: 全プロキシ失敗なら「プロキシなし」で最終試行 ---
+            # 全プロキシ失敗時の最終手段
             if not success:
-                write_log(f"  [最終手段] 全プロキシ失敗のため、プロキシなしで接続します。")
+                write_log(f"  [最終手段] プロキシなしで実行")
                 driver = None
                 try:
                     driver = create_driver(None, USER_AGENT)
                     driver.set_page_load_timeout(30)
                     driver.get(URL)
-                    write_log(f"  [成功] プロキシなしでアクセス完了: {driver.title[:20]}...")
+                    time.sleep(10) # 生IPこそ確実に
+                    write_log(f"  [成功] プロキシなし完了: {driver.title[:15]}...")
                     success = True
                 except Exception as e:
-                    write_log(f"  [断念] プロキシなしでも失敗しました: {str(e)[:40]}")
+                    write_log(f"  [断念] 最終手段も失敗: {str(e)[:40]}")
                 finally:
                     if driver: driver.quit()
-
-            if success:
-                time.sleep(random.uniform(2, 5))
 
         cycle_end_time = start_time + datetime.timedelta(seconds=total_seconds)
         while datetime.datetime.now() < cycle_end_time:
