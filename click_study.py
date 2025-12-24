@@ -27,11 +27,22 @@ X_CYCLES = int(conf['X_CYCLES'])
 MODE = conf['MODE']
 USER_AGENT = conf['USER_AGENT']
 
+# プロキシ設定を読み込む
+raw_proxy_list = conf.get('PROXY_LIST', '') # 空ならプロキシなし
+proxies = [p.strip() for p in raw_proxy_list.split(',') if p.strip()]
+
 # 2. ブラウザ設定
 options = Options()
 options.add_argument('--headless')
 options.add_argument('--no-sandbox')
 options.add_argument('--disable-dev-shm-usage')
+
+# プロキシが設定されていれば、ランダムに1つ選んで適用
+if proxies:
+    chosen_proxy = random.choice(proxies)
+    options.add_argument(f'--proxy-server={chosen_proxy}')
+    write_log(f"使用プロキシ: {chosen_proxy}")
+
 if USER_AGENT:
     options.add_argument(f'user-agent={USER_AGENT}')
 
