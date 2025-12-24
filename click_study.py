@@ -20,14 +20,16 @@ def create_driver(proxy_list, user_agent):
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')              # GPUを無効化（エラー対策）
+    options.add_argument('--disable-extensions')      # 拡張機能を無効化
+    options.add_argument('--remote-debugging-port=9222') # ポート衝突を避ける
     
-    # タイムアウト対策（無料プロキシは遅いため、接続待ちを30秒に設定）
-    options.add_argument('--timeout=30000') 
+    # タイムアウト対策
+    options.page_load_strategy = 'normal' 
 
     if user_agent:
         options.add_argument(f'user-agent={user_agent}')
     
-    # ★ポイント：プロキシリストが「空でない」場合のみランダムに選ぶ
     if proxy_list:
         chosen_proxy = random.choice(proxy_list)
         options.add_argument(f'--proxy-server={chosen_proxy}')
@@ -50,7 +52,6 @@ X_CYCLES = int(conf['X_CYCLES'])
 MODE = conf['MODE']
 USER_AGENT = conf['USER_AGENT']
 
-# プロキシリストの作成（空の場合は空のリストになる）
 raw_proxy_list = conf.get('PROXY_LIST', '')
 proxies = [p.strip() for p in raw_proxy_list.split(',') if p.strip()]
 
@@ -61,7 +62,6 @@ try:
         write_log(f"--- 第 {c} サイクル開始 ---")
         total_seconds = M_MIN * 60
         
-        # タイミングの生成
         if MODE == "fixed":
             timings = [ (total_seconds / N_TIMES) * i for i in range(N_TIMES) ]
         else:
@@ -75,25 +75,24 @@ try:
                 write_log(f"  次まで {round(wait_duration, 1)}秒 待機 [予定 {next_time}]")
                 time.sleep(wait_duration)
             
-            # --- 毎回ブラウザを生成 ---
-            driver = create_driver(proxies, USER_AGENT)
-            # ページ読み込みのタイムアウト時間を設定（秒）
-            driver.set_page_load_timeout(30) 
-
+            # --- ブラウザ生成 ---
             try:
+                driver = create_driver(proxies, USER_AGENT)
+                driver.set_page_load_timeout(45) # 少し長めに待つ
+
                 write_log(f"  [サイクル{c}] {i}回目アクセス実行: {URL}")
                 driver.get(URL)
-                # ページが開いた後、少しだけ滞在（1〜3秒ランダム）
-                time.sleep(random.uniform(1, 3)) 
+                time.sleep(random.uniform(2, 4))
+                
             except Exception as e:
-                # プロキシが死んでいる場合、ここでエラーが出る
-                write_log(f"  警告: アクセスに失敗しました（プロキシが死んでいる可能性があります）: {e}")
+                write_log(f"  警告: アクセス中にエラーが発生しました: {e}")
             finally:
-                driver.quit() # 必ず閉じる
+                # 確実にブラウザを閉じる
+                if 'driver' in locals():
+                    driver.quit()
             
             last_time = current_timing
             
-        # サイクルの残り時間を消化
         final_wait = total_seconds - last_time
         if final_wait > 0:
             time.sleep(final_wait)
