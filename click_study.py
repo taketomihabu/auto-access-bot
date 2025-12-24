@@ -3,17 +3,27 @@ import random
 import configparser
 import datetime
 import sys
+import os # 追加
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
+# 日本時間のタイムスタンプを取得してファイル名を作成
+# プログラム起動時の時刻をファイル名に使う
+jst_now = datetime.datetime.now()
+log_filename = f"log_{jst_now.strftime('%Y%m%d_%H%M%S')}.txt"
+
 def write_log(message):
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_msg = f"[{now}] {message}"
-    print(log_msg)
-    with open("operation_log.txt", "a", encoding="utf-8") as f:
+    # flush=True を追加することで、GitHubの画面に即座に表示されるようになります
+    print(log_msg, flush=True)
+    with open(log_filename, "a", encoding="utf-8") as f:
         f.write(log_msg + "\n")
+
+# --- 以下、前回のロジックを維持 ---
+# (create_driver 関数などはそのまま)
 
 def create_driver(proxy_list, user_agent):
     options = Options()
@@ -47,14 +57,14 @@ USER_AGENT = conf['USER_AGENT']
 raw_proxy_list = conf.get('PROXY_LIST', '')
 proxies = [p.strip() for p in raw_proxy_list.split(',') if p.strip()]
 
-write_log("=== プログラム開始 ===")
+write_log(f"=== プログラム開始 (ログファイル: {log_filename}) ===")
 
+# (以降のループ処理もそのまま。write_logを呼び出しているのでリアルタイム化されます)
 try:
     for c in range(1, X_CYCLES + 1):
         total_seconds = M_MIN * 60
         start_time = datetime.datetime.now()
         
-        # スケジュール決定
         if MODE == "fixed":
             offsets = [(total_seconds / N_TIMES) * i for i in range(N_TIMES)]
         else:
@@ -72,25 +82,23 @@ try:
                 time.sleep(1)
             
             success = False
-            max_retries = 3  # 最大3回別のプロキシで試す
+            max_retries = 3
             
             for attempt in range(1, max_retries + 1):
                 driver, used_proxy = create_driver(proxies, USER_AGENT)
-                driver.set_page_load_timeout(40) # 40秒待ってもダメなら次へ
+                driver.set_page_load_timeout(40)
 
                 try:
                     write_log(f"  [実行] {i}回目(試行{attempt}): {used_proxy}")
                     driver.get(URL)
                     
-                    # 成功判定：タイトルが取得でき、かつ空でないこと
                     if driver.title and "not available" not in driver.title.lower():
                         write_log(f"  [成功] Title: {driver.title[:15]}...")
                         success = True
                         time.sleep(random.uniform(3, 5))
-                        break # 成功したのでリトライループを抜ける
+                        break
                     else:
                         write_log(f"  [失敗] ページ内容が取得できませんでした。")
-                
                 except Exception as e:
                     write_log(f"  [エラー] 接続失敗: {str(e)[:40]}")
                 finally:
@@ -103,7 +111,6 @@ try:
             if not success:
                 write_log(f"  [断念] {i}回目は規定回数試行しましたが失敗しました。")
 
-        # サイクル終了待機
         cycle_end_time = start_time + datetime.timedelta(seconds=total_seconds)
         while datetime.datetime.now() < cycle_end_time:
             time.sleep(1)
