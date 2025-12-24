@@ -24,12 +24,14 @@ def create_driver(proxy_list, user_agent):
     options.add_argument('--remote-debugging-port=9222')
     if user_agent:
         options.add_argument(f'user-agent={user_agent}')
+    
+    chosen_proxy = "None"
     if proxy_list:
         chosen_proxy = random.choice(proxy_list)
         options.add_argument(f'--proxy-server={chosen_proxy}')
-        # ログはアクセス直前に出すためここでは抑制
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options), chosen_proxy
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options), "None"
+    
+    service = Service(ChromeDriverManager().install())
+    return webdriver.Chrome(service=service, options=options), chosen_proxy
 
 # 1. 設定読み込み
 config = configparser.ConfigParser()
@@ -52,7 +54,7 @@ try:
         total_seconds = M_MIN * 60
         start_time = datetime.datetime.now()
         
-        # --- 改修：最初に全スケジュールを決定 ---
+        # スケジュール決定
         if MODE == "fixed":
             offsets = [(total_seconds / N_TIMES) * i for i in range(N_TIMES)]
         else:
@@ -60,33 +62,48 @@ try:
         
         schedule_times = [start_time + datetime.timedelta(seconds=o) for o in offsets]
         
-        write_log(f"--- 第 {c} サイクル スケジュール公開 ---")
+        write_log(f"--- 第 {c} サイクル スケジュール ---")
         for idx, t in enumerate(schedule_times, 1):
             write_log(f"  予定 {idx}回目: {t.strftime('%H:%M:%S')}")
         write_log("---------------------------------------")
 
-        # --- 実行フェーズ ---
         for i, target_time in enumerate(schedule_times, 1):
-            # 予定時刻まで待機
             while datetime.datetime.now() < target_time:
                 time.sleep(1)
             
-            # ブラウザ起動とプロキシ選択
-            driver, used_proxy = create_driver(proxies, USER_AGENT)
-            driver.set_page_load_timeout(60) # 応答が遅いプロキシのために長めに設定
+            success = False
+            max_retries = 3  # 最大3回別のプロキシで試す
+            
+            for attempt in range(1, max_retries + 1):
+                driver, used_proxy = create_driver(proxies, USER_AGENT)
+                driver.set_page_load_timeout(40) # 40秒待ってもダメなら次へ
 
-            try:
-                write_log(f"  [実行] {i}回目開始 (Proxy: {used_proxy})")
-                driver.get(URL)
-                # ページのタイトル等を表示して「アクセスできた感」を出す（デバッグ用）
-                write_log(f"  [完了] ページタイトル: {driver.title[:20]}...")
-                time.sleep(random.uniform(3, 5))
-            except Exception as e:
-                write_log(f"  [失敗] アクセスエラー: {str(e)[:50]}")
-            finally:
-                driver.quit()
+                try:
+                    write_log(f"  [実行] {i}回目(試行{attempt}): {used_proxy}")
+                    driver.get(URL)
+                    
+                    # 成功判定：タイトルが取得でき、かつ空でないこと
+                    if driver.title and "not available" not in driver.title.lower():
+                        write_log(f"  [成功] Title: {driver.title[:15]}...")
+                        success = True
+                        time.sleep(random.uniform(3, 5))
+                        break # 成功したのでリトライループを抜ける
+                    else:
+                        write_log(f"  [失敗] ページ内容が取得できませんでした。")
+                
+                except Exception as e:
+                    write_log(f"  [エラー] 接続失敗: {str(e)[:40]}")
+                finally:
+                    driver.quit()
+                
+                if attempt < max_retries:
+                    write_log("  [リトライ] 別のプロキシで再試行します...")
+                    time.sleep(2)
+            
+            if not success:
+                write_log(f"  [断念] {i}回目は規定回数試行しましたが失敗しました。")
 
-        # サイクル終了までの残時間待機（渋滞防止用）
+        # サイクル終了待機
         cycle_end_time = start_time + datetime.timedelta(seconds=total_seconds)
         while datetime.datetime.now() < cycle_end_time:
             time.sleep(1)
@@ -94,4 +111,4 @@ try:
     write_log("=== 全サイクル終了 ===")
 
 except Exception as e:
-    write_log(f"予期せぬエラー: {e}")
+    write_log(f"致命的エラー: {e}")
