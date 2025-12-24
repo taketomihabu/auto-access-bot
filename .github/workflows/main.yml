@@ -2,8 +2,8 @@ name: Scheduled Auto Access
 
 on:
   schedule:
-    # 20分おきに実行する設定
-    - cron: '*/20 * * * *'
+    # 5分おきに実行する設定
+    - cron: '*/5 * * * *'
   workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
 
 jobs:
