@@ -1,0 +1,30 @@
+name: Scheduled Auto Access
+
+on:
+  schedule:
+    # 20分おきに実行する設定
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    env:
+      TZ: 'Asia/Tokyo' # 日本時間に設定
+
+    steps:
+      - name: コードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Pythonの準備
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 必要な道具をインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium webdriver-manager configparser
+
+      - name: プログラム実行
+        run: python click_study.py
