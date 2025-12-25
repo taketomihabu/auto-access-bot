@@ -8,8 +8,11 @@ name: Scheduled Auto Access
 
 on:
   schedule:
-#    - cron: '15,45 * * * *'
-    - cron: '0 * * * *'
+    #- cron: '15,45 * * * *'
+    # 毎時 00 分に実行
+    #- cron: '0 * * * *'
+    # 毎時 04 分に実行
+    - cron: '4 * * * *'
   workflow_dispatch:
 
 jobs:
