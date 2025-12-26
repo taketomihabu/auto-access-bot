@@ -79,21 +79,36 @@ def main_process():
     current_total_success = 0
     write_log(f"=== システム起動 (目標合計アクセス: {TOTAL_GOAL}回) ===")
 
+    # --- 全スケジュールの事前計算とログ出力 ---
+    all_schedules = []
+    temp_now = datetime.datetime.now()
+    
     for c in range(1, X_CYCLES + 1):
         total_seconds = M_MIN * 60
-        cycle_start_time = datetime.datetime.now()
+        # 簡易的に各サイクルの開始をシミュレートして予定を出す
+        cycle_start_est = temp_now + datetime.timedelta(minutes=M_MIN * (c-1))
         
-        # スケジュール決定
         if conf['MODE'] == "fixed":
             offsets = [(total_seconds / N_TIMES) * i for i in range(N_TIMES)]
         else:
             offsets = sorted([random.uniform(0, total_seconds) for _ in range(N_TIMES)])
         
-        schedule_times = [cycle_start_time + datetime.timedelta(seconds=o) for o in offsets]
-        
+        for idx, o in enumerate(offsets, 1):
+            t = cycle_start_est + datetime.timedelta(seconds=o)
+            all_schedules.append(t)
+            write_log(f"  [予定] 通算{len(all_schedules)}回目: {t.strftime('%H:%M:%S')}")
+    
+    write_log("-----------------------------------------")
+
+    # --- 実際の実行ループ ---
+    schedule_idx = 0
+    for c in range(1, X_CYCLES + 1):
         write_log(f"--- サイクル {c}/{X_CYCLES} 開始 ---")
 
-        for i, target_time in enumerate(schedule_times, 1):
+        for i in range(1, N_TIMES + 1):
+            target_time = all_schedules[schedule_idx]
+            schedule_idx += 1
+            
             # 予定時刻まで待機
             while datetime.datetime.now() < target_time:
                 time.sleep(1)
