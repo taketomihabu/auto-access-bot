@@ -11,21 +11,10 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
-# ==========================================================
-# 二重起動防止のチェック（GitHubのconcurrency設定に移行したため無効化）
-# ==========================================================
+# --- 二重起動防止 (GitHubのconcurrency設定を使うため無効化中) ---
 # LOCK_FILE = "running.lock"
-# if os.path.exists(LOCK_FILE):
-#     file_time = datetime.datetime.fromtimestamp(os.path.getmtime(LOCK_FILE))
-#     if datetime.datetime.now() - file_time < datetime.timedelta(hours=3):
-#         print(f"[{datetime.datetime.now()}] 他のプロセスが実行中のため、終了します。")
-#         sys.exit(0)
-# with open(LOCK_FILE, "w") as f:
-#     f.write(str(os.getpid()))
-# def remove_lock():
-#     if os.path.exists(LOCK_FILE):
-#         os.remove(LOCK_FILE)
-# ==========================================================
+# if __name__ == "__main__": 
+#     ... (中略) ...
 
 jst_now = datetime.datetime.now()
 log_filename = f"log_{jst_now.strftime('%Y%m%d_%H%M%S')}.txt"
@@ -36,6 +25,13 @@ def write_log(message):
     print(log_msg, flush=True)
     with open(log_filename, "a", encoding="utf-8") as f:
         f.write(log_msg + "\n")
+
+def get_current_ip():
+    """現在の生IPアドレスを取得する"""
+    try:
+        return requests.get('https://ifconfig.me', timeout=10).text.strip()
+    except:
+        return "取得失敗"
 
 def create_driver(proxy, user_agent):
     chrome_options = Options()
@@ -81,12 +77,11 @@ def main_process():
 
     # --- 全スケジュールの事前計算とログ出力 ---
     all_schedules = []
-    temp_now = datetime.datetime.now()
+    start_base_time = datetime.datetime.now()
     
     for c in range(1, X_CYCLES + 1):
         total_seconds = M_MIN * 60
-        # 簡易的に各サイクルの開始をシミュレートして予定を出す
-        cycle_start_est = temp_now + datetime.timedelta(minutes=M_MIN * (c-1))
+        cycle_start_est = start_base_time + datetime.timedelta(minutes=M_MIN * (c-1))
         
         if conf['MODE'] == "fixed":
             offsets = [(total_seconds / N_TIMES) * i for i in range(N_TIMES)]
@@ -100,7 +95,6 @@ def main_process():
     
     write_log("-----------------------------------------")
 
-    # --- 実際の実行ループ ---
     schedule_idx = 0
     for c in range(1, X_CYCLES + 1):
         write_log(f"--- サイクル {c}/{X_CYCLES} 開始 ---")
@@ -109,7 +103,6 @@ def main_process():
             target_time = all_schedules[schedule_idx]
             schedule_idx += 1
             
-            # 予定時刻まで待機
             while datetime.datetime.now() < target_time:
                 time.sleep(1)
             
@@ -137,24 +130,24 @@ def main_process():
                     write_log(f"  [エラー] {str(e)[:50]}")
                 finally:
                     if driver: driver.quit()
-                
                 if success: break
 
+            # --- プロキシ失敗時の生IPリトライ ---
             if not success:
-                write_log(f"  [最終手段] 生IPで実行")
+                write_log(f"  [最終手段] 生IPで実行準備中...")
+                current_ip = get_current_ip() # 生IP取得
                 driver = None
                 try:
                     driver = create_driver(None, USER_AGENT)
                     driver.get(URL)
                     time.sleep(12)
-                    write_log(f"  [完了] 生IPアクセス実行")
+                    write_log(f"  [完了] 生IPアクセス実行 (IP: {current_ip})")
                     current_total_success += 1
                 except Exception as e:
                     write_log(f"  [断念] 生IP失敗: {e}")
                 finally:
                     if driver: driver.quit()
 
-            # 目標達成チェック
             if current_total_success >= TOTAL_GOAL:
                 write_log(f"== 目標数({TOTAL_GOAL}回)に達したため、早期終了します ==")
                 return
@@ -167,5 +160,4 @@ if __name__ == "__main__":
     except Exception as e:
         write_log(f"システムエラー: {e}")
     finally:
-        # remove_lock() # ロックファイルを使用しないためコメントアウト
         write_log("=== 全工程終了 ===")
