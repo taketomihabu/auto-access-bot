@@ -1,13 +1,13 @@
 name: Scheduled Auto Access
 
-# on:
-#  schedule:
-#    # 30分おきに実行する設定
-#    - cron: '*/30 * * * *'
-#  workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false # 前のが終わるまで次を起動させない（またはスキップする）
 
 on:
   schedule:
+    # 30分おきに実行する設定
+    # - cron: '*/30 * * * *'
     #- cron: '15,45 * * * *'
     # 毎時 00 分に実行
     #- cron: '0 * * * *'
@@ -15,7 +15,7 @@ on:
     #- cron: '4 * * * *'
     # 毎時 12 分に実行
     - cron: '12 * * * *'
-  workflow_dispatch:
+  workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
 
 jobs:
   run-bot:
