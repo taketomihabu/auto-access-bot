@@ -2,7 +2,8 @@ name: Scheduled Auto Access
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: false # 前のが終わるまで次を起動させない（またはスキップする）
+  #cancel-in-progress: false # 前のが終わるまで次を起動させない（またはスキップする）
+  cancel-in-progress: true
 
 on:
   schedule:
