@@ -10,27 +10,27 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- 二重起動防止のチェック ---
-# GitHub Actionsの環境ではプロセスが分離されていることがあるため、
-# ファイルの存在でチェックします。
-LOCK_FILE = "running.lock"
+# # --- 二重起動防止のチェック ---
+# # GitHub Actionsの環境ではプロセスが分離されていることがあるため、
+# # ファイルの存在でチェックします。
+# LOCK_FILE = "running.lock"
 
-if os.path.exists(LOCK_FILE):
-    # 前回の実行が異常終了してファイルが残っている可能性も考慮し、
-    # ファイルの作成日時が3時間以上前なら無視して進む（念のため）
-    file_time = datetime.datetime.fromtimestamp(os.path.getmtime(LOCK_FILE))
-    if datetime.datetime.now() - file_time < datetime.timedelta(hours=3):
-        print(f"[{datetime.datetime.now()}] 他のプロセスが実行中のため、終了します。")
-        sys.exit(0)
+# if os.path.exists(LOCK_FILE):
+#     # 前回の実行が異常終了してファイルが残っている可能性も考慮し、
+#     # ファイルの作成日時が3時間以上前なら無視して進む（念のため）
+#     file_time = datetime.datetime.fromtimestamp(os.path.getmtime(LOCK_FILE))
+#     if datetime.datetime.now() - file_time < datetime.timedelta(hours=3):
+#         print(f"[{datetime.datetime.now()}] 他のプロセスが実行中のため、終了します。")
+#         sys.exit(0)
 
-# ロックファイルを作成
-with open(LOCK_FILE, "w") as f:
-    f.write(str(os.getpid()))
+# # ロックファイルを作成
+# with open(LOCK_FILE, "w") as f:
+#     f.write(str(os.getpid()))
 
-def remove_lock():
-    if os.path.exists(LOCK_FILE):
-        os.remove(LOCK_FILE)
-# ----------------------------
+# def remove_lock():
+#     if os.path.exists(LOCK_FILE):
+#         os.remove(LOCK_FILE)
+# # ----------------------------
 
 # 日本時間のタイムスタンプ
 jst_now = datetime.datetime.now()
@@ -167,5 +167,5 @@ except Exception as e:
     write_log(f"システムエラー: {e}")
 finally:
     # 終了時に必ずロックファイルを削除
-    remove_lock()
+    # remove_lock()
     write_log("=== 全工程終了 ===")
