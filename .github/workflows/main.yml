@@ -5,18 +5,18 @@ concurrency:
   #cancel-in-progress: false # 前のが終わるまで次を起動させない（またはスキップする）
   cancel-in-progress: true
 
-on:
-  schedule:
-    # 30分おきに実行する設定
-    # - cron: '*/30 * * * *'
-    #- cron: '15,45 * * * *'
-    # 毎時 00 分に実行
-    #- cron: '0 * * * *'
-    # 毎時 04 分に実行
-    #- cron: '4 * * * *'
-    # 毎時 12 分に実行
-    # -     #-     #- cron
-  workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
+# on:
+#   schedule:
+#     # 30分おきに実行する設定
+#     # - cron: '*/30 * * * *'
+#     #- cron: '15,45 * * * *'
+#     # 毎時 00 分に実行
+#     #- cron: '0 * * * *'
+#     # 毎時 04 分に実行
+#     #- cron: '4 * * * *'
+#     # 毎時 12 分に実行
+#     # -     #-     #- cron
+#   workflow_dispatch: # ← これを書くと「手動実行」ボタンが出ます
 
 jobs:
   run-bot:
